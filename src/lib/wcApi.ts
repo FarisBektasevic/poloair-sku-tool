@@ -5,6 +5,7 @@
 
 const PROXY_URL: string = import.meta.env.VITE_N8N_WC_PROXY_URL;
 const CATALOG_URL: string = import.meta.env.VITE_N8N_CATALOG_URL;
+const GITHUB_SYNC_URL: string = import.meta.env.VITE_N8N_GITHUB_SYNC_URL;
 
 export type WcVariationAttribute = { id: number; name: string; slug: string; option: string };
 
@@ -156,6 +157,22 @@ function extractWcError(resp: unknown): string | null {
   return err.description || err.message || 'Nepoznata greška sa servera';
 }
 
+// Ažurira snapshot na GitHub-u (public/catalog.json) tako da sledeći refresh/otvaranje
+// odmah pokaže upisan SKU, umesto starog snapshot-a. Greška ovde se NE prosleđuje dalje —
+// WooCommerce upis je već uspeo, to je bitno; GitHub sync je "nice to have" perzistencija.
+async function syncSkuToGithub(productId: number, sku: string, variationId?: number): Promise<void> {
+  if (!GITHUB_SYNC_URL) return;
+  try {
+    await fetch(GITHUB_SYNC_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ productId, variationId, sku }),
+    });
+  } catch (e) {
+    // tiho ignorisano — sledeće "Osveži uživo" će svakako povući tačno stanje sa sajta
+  }
+}
+
 export async function updateProductSku(productId: number, sku: string): Promise<{ ok: true; sku: string }> {
   const resp = await proxyCall('PUT', `products/${productId}`, { sku }, { retries: 3 });
   const wcError = extractWcError(resp);
@@ -165,6 +182,7 @@ export async function updateProductSku(productId: number, sku: string): Promise<
   if (actual !== sku) {
     throw new ProxyError(`Server je vratio drugačiji SKU (${actual || '—'}) od poslatog (${sku})`);
   }
+  await syncSkuToGithub(productId, actual);
   return { ok: true, sku: actual };
 }
 
@@ -186,5 +204,6 @@ export async function updateVariationSku(
   if (actual !== sku) {
     throw new ProxyError(`Server je vratio drugačiji SKU (${actual || '—'}) od poslatog (${sku})`);
   }
+  await syncSkuToGithub(productId, actual, variationId);
   return { ok: true, sku: actual };
 }
