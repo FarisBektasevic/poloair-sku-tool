@@ -115,11 +115,17 @@ function toItems(payload: CatalogPayload): CatalogItem[] {
     });
 }
 
-// Učita katalog iz statičnog snapshot fajla (public/catalog.json) — trenutno, bez mrežnog
-// poziva ka n8n-u. Snapshot se generiše unapred (skripta/ručno) iz batch endpointa ispod.
+// Učita katalog SA GITHUB-A (raw fajl, main grana) — ne sa lokalnog diska/build-a. Ovo je
+// bitno: kad se SKU sačuva, app commit-uje novo stanje na GitHub (vidi syncSkuToGithub ispod);
+// ako bismo čitali lokalni /catalog.json, refresh bi i dalje pokazivao staro stanje dok se
+// projekat ponovo ne build-uje. Čitanjem direktno sa GitHub-a, svaki refresh vidi PRAVO
+// najnovije stanje, bez obzira gde je app deployovan.
+const GITHUB_RAW_CATALOG_URL =
+  'https://raw.githubusercontent.com/FarisBektasevic/poloair-sku-tool/main/public/catalog.json';
+
 export async function loadCatalogSnapshot(): Promise<{ items: CatalogItem[]; generated: string }> {
-  const res = await fetch('/catalog.json', { cache: 'no-store' });
-  if (!res.ok) throw new ProxyError(`Snapshot nije dostupan (HTTP ${res.status})`);
+  const res = await fetch(`${GITHUB_RAW_CATALOG_URL}?t=${Date.now()}`, { cache: 'no-store' });
+  if (!res.ok) throw new ProxyError(`Katalog nije dostupan na GitHub-u (HTTP ${res.status})`);
   const payload = (await res.json()) as CatalogPayload;
   return { items: toItems(payload), generated: payload.generated };
 }
