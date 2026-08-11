@@ -1,12 +1,12 @@
 {
- "generated": "2026-08-11T20:15:05.102Z",
+ "generated": "2026-08-11T20:17:50.375Z",
  "count": 236,
  "items": [
   {
    "id": 18067,
    "name": "Poloair set M19 TEGET ST38",
    "type": "variable",
-   "sku": "",
+   "sku": "test",
    "variations": [
     {
      "id": 18069,
