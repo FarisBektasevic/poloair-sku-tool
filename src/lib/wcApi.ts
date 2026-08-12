@@ -115,16 +115,18 @@ function toItems(payload: CatalogPayload): CatalogItem[] {
     });
 }
 
-// Učita katalog SA GITHUB-A (raw fajl, main grana) — ne sa lokalnog diska/build-a. Ovo je
-// bitno: kad se SKU sačuva, app commit-uje novo stanje na GitHub (vidi syncSkuToGithub ispod);
-// ako bismo čitali lokalni /catalog.json, refresh bi i dalje pokazivao staro stanje dok se
-// projekat ponovo ne build-uje. Čitanjem direktno sa GitHub-a, svaki refresh vidi PRAVO
-// najnovije stanje, bez obzira gde je app deployovan.
-const GITHUB_RAW_CATALOG_URL =
-  'https://raw.githubusercontent.com/FarisBektasevic/poloair-sku-tool/main/public/catalog.json';
+// Učita katalog preko GitHub Contents API-ja (NE raw.githubusercontent.com — taj URL sedi
+// iza Fastly CDN keša sa max-age=300 koji IGNORIŠE query string cache-busting, pa refresh
+// odmah posle upisa zna da pokaže staru vrednost i do 5 minuta). api.github.com nema taj keš
+// i uvek vraća tačno ono što je poslednje komitovano.
+const GITHUB_API_CATALOG_URL =
+  'https://api.github.com/repos/FarisBektasevic/poloair-sku-tool/contents/public/catalog.json';
 
 export async function loadCatalogSnapshot(): Promise<{ items: CatalogItem[]; generated: string }> {
-  const res = await fetch(`${GITHUB_RAW_CATALOG_URL}?t=${Date.now()}`, { cache: 'no-store' });
+  const res = await fetch(GITHUB_API_CATALOG_URL, {
+    cache: 'no-store',
+    headers: { Accept: 'application/vnd.github.raw+json' },
+  });
   if (!res.ok) throw new ProxyError(`Katalog nije dostupan na GitHub-u (HTTP ${res.status})`);
   const payload = (await res.json()) as CatalogPayload;
   return { items: toItems(payload), generated: payload.generated };
